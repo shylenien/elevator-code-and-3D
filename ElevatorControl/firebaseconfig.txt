@@ -1,0 +1,9 @@
+const firebaseConfig = {
+  apiKey: "AIzaSyATaAIrcEG6EKlgPv-rpqEI2HFtK7tdoWM",
+  authDomain: "elavatorcontrol.firebaseapp.com",
+  databaseURL: "https://elavatorcontrol-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "elavatorcontrol",
+  storageBucket: "elavatorcontrol.firebasestorage.app",
+  messagingSenderId: "968978463723",
+  appId: "1:968978463723:web:e50dfdc4a62c0d0f9737ae"
+};

@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCADA Dashboard - Cabin Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Tuỳ chỉnh thanh cuộn cho Terminal */
+        #terminal::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #terminal::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+
+        #terminal::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+
+        #terminal::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+
+        .dot {
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .dot-offline {
+            background-color: #ef4444;
+            box-shadow: 0 0 5px #ef4444;
+        }
+
+        .dot-online {
+            background-color: #22c55e;
+            box-shadow: 0 0 8px #22c55e;
+        }
+
+        .dot-wait {
+            background-color: #f59e0b;
+            box-shadow: 0 0 5px #f59e0b;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-200 min-h-screen flex flex-col md:flex-row p-4 md:p-8 gap-6 font-sans">
+
+    <!-- CỘT TRÁI: ĐIỀU KHIỂN VÀ TRẠNG THÁI -->
+    <div class="w-full md:w-1/3 flex flex-col gap-6">
+
+        <!-- Panel Trạng Thái Hệ Thống -->
+        <div class="bg-white rounded-xl shadow-lg p-5 border-t-4 border-blue-600">
+            <h2 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">TRẠNG THÁI HỆ THỐNG</h2>
+            <div class="flex flex-col gap-3 font-semibold text-sm">
+                <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
+                    <span class="text-gray-600">Máy chủ Google Firebase:</span>
+                    <div class="flex items-center"><span id="dot-fb" class="dot dot-wait"></span><span id="st-fb"
+                            class="text-yellow-600">Đang kết nối...</span></div>
+                </div>
+                <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
+                    <span class="text-gray-600">Mạch ESP32-S3-N16R8:</span>
+                    <div class="flex items-center"><span id="dot-esp" class="dot dot-wait"></span><span id="st-esp"
+                            class="text-yellow-600">Đang chờ...</span></div>
+                </div>
+                <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
+                    <span class="text-gray-600">Mạch Arduino Uno:</span>
+                    <div class="flex items-center"><span id="dot-uno" class="dot dot-wait"></span><span id="st-uno"
+                            class="text-yellow-600">Đang chờ...</span></div>
+                </div>
+                <div class="flex justify-between items-center bg-blue-50 p-2 rounded border border-blue-200">
+                    <span class="text-blue-800">Tốc độ động cơ hiện tại:</span>
+                    <div class="flex items-center">
+                        <span id="current-speed-display" class="text-blue-700 font-extrabold text-xl">0</span>
+                        <span class="text-blue-500 text-xs ml-1 font-normal">PWM</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel Điều Khiển -->
+        <div class="bg-white rounded-xl shadow-lg p-5 border-t-4 border-green-500">
+            <h2 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">BẢNG ĐIỀU KHIỂN</h2>
+
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="font-bold text-gray-700">Tốc độ (PWM)</label>
+                    <input type="number" id="speed-input" min="0" max="255" value="0"
+                        class="w-20 font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded border border-blue-300 text-center focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <input type="range" id="speed-slider" min="0" max="255" value="0"
+                    class="w-full h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+            </div>
+
+            <div class="flex gap-4">
+                <button id="btn-fwd"
+                    class="flex-1 py-3 bg-gray-200 text-gray-700 font-bold rounded-lg transition shadow">MỞ CỬA ◄►</button>
+                <button id="btn-rev"
+                    class="flex-1 py-3 bg-gray-200 text-gray-700 font-bold rounded-lg transition shadow">ĐÓNG CỬA ►◄</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CỘT PHẢI: MÀN HÌNH TERMINAL GIÁM SÁT -->
+    <div class="w-full md:w-2/3 flex flex-col bg-gray-900 rounded-xl shadow-2xl overflow-hidden border border-gray-700">
+        <div class="bg-gray-800 px-4 py-2 flex justify-between items-center border-b border-gray-700">
+            <div class="flex gap-2">
+                <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                <div class="w-3 h-3 rounded-full bg-green-500"></div>
+            </div>
+            <span class="text-gray-400 text-xs font-mono font-bold tracking-widest">SCADA LIVE TERMINAL</span>
+            <button id="btn-clear"
+                class="text-xs text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded bg-gray-700">Xóa
+                Log</button>
+        </div>
+        <div id="terminal" class="p-4 flex-1 h-[500px] overflow-y-auto font-mono text-sm space-y-1">
+            <!-- Dòng log mẫu ban đầu -->
+            <div class="text-green-500">> Hệ thống giám sát SCADA khởi động...</div>
+        </div>
+    </div>
+
+    <!-- KẾT NỐI FIREBASE VÀ LOGIC -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // =========================================================
+        // ⚠️ FIREBASE CONFIG ⚠️
+        // =========================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyATaAIrcEG6EKlgPv-rpqEI2HFtK7tdoWM",
+            authDomain: "elavatorcontrol.firebaseapp.com",
+            databaseURL: "https://elavatorcontrol-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "elavatorcontrol",
+            storageBucket: "elavatorcontrol.firebasestorage.app",
+            messagingSenderId: "968978463723",
+            appId: "1:968978463723:web:e50dfdc4a62c0d0f9737ae"
+        };
+
+        // --- HÀM IN LOG RA TERMINAL ---
+        const terminal = document.getElementById('terminal');
+        function logToTerminal(source, message, type = "info") {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('vi-VN');
+            const timeStr = now.toLocaleTimeString('vi-VN') + "." + now.getMilliseconds().toString().padStart(3, '0');
+            const fullTimeStr = dateStr + " " + timeStr;
+
+            let colorClass = "text-gray-300"; // Mặc định
+            if (type === "cmd") colorClass = "text-cyan-400 font-bold";
+            if (type === "success") colorClass = "text-green-400";
+            if (type === "error") colorClass = "text-red-400 font-bold";
+            if (type === "hardware") colorClass = "text-yellow-400";
+
+            const div = document.createElement('div');
+            div.innerHTML = `<span class="text-gray-500">[${fullTimeStr}]</span> <span class="text-purple-400">[${source}]</span> <span class="${colorClass}">${message}</span>`;
+            terminal.appendChild(div);
+
+            // Tự động cuộn xuống cuối
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        document.getElementById('btn-clear').addEventListener('click', () => {
+            terminal.innerHTML = '<div class="text-green-500">> Đã xóa lịch sử log.</div>';
+        });
+
+        // --- KIỂM TRA VÀ KHỞI TẠO FIREBASE ---
+        if (firebaseConfig.apiKey.includes("ĐIỀN_")) {
+            logToTerminal("LỖI", "Chưa nhập cấu hình Firebase vào HTML!", "error");
+        }
+
+        let db, speedRef, dirRef, hwLogRef, heartbeatRef;
+        let currentDir = 1;
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getDatabase(app);
+            speedRef = ref(db, 'cabin/speed');
+            dirRef = ref(db, 'cabin/direction');
+            hwLogRef = ref(db, 'cabin/hardware_log'); // Node mới để đọc log từ mạch
+            heartbeatRef = ref(db, 'cabin/status/heartbeat'); // Node giám sát nhịp tim
+
+            logToTerminal("System", "Đã khởi tạo Firebase SDK.", "success");
+        } catch (error) {
+            logToTerminal("Google Firebase", "Lỗi khởi tạo: " + error.message, "error");
+        }
+
+        // --- QUẢN LÝ UI VÀ NÚT BẤM ---
+        const slider = document.getElementById('speed-slider');
+        const speedInput = document.getElementById('speed-input');
+        const btnFwd = document.getElementById('btn-fwd');
+        const btnRev = document.getElementById('btn-rev');
+
+        function updateBtnUI(dir) {
+            if (dir === 1) {
+                btnFwd.className = "flex-1 py-3 bg-green-600 text-white font-bold rounded-lg transition shadow-lg transform scale-105 border-2 border-green-800";
+                btnRev.className = "flex-1 py-3 bg-gray-200 text-gray-500 font-bold rounded-lg transition shadow";
+            } else {
+                btnRev.className = "flex-1 py-3 bg-red-600 text-white font-bold rounded-lg transition shadow-lg transform scale-105 border-2 border-red-800";
+                btnFwd.className = "flex-1 py-3 bg-gray-200 text-gray-500 font-bold rounded-lg transition shadow";
+            }
+        }
+
+        slider.addEventListener('input', (e) => {
+            speedInput.value = e.target.value;
+        });
+
+        slider.addEventListener('change', (e) => {
+            const val = parseInt(e.target.value);
+            if (db) {
+                set(speedRef, val);
+                logToTerminal("WEB CONTROL", `Gửi lệnh Set Tốc độ = ${val}`, "cmd");
+            }
+        });
+
+        speedInput.addEventListener('change', (e) => {
+            let val = parseInt(e.target.value);
+            if (val > 255) val = 255;
+            if (val < 0 || isNaN(val)) val = 0;
+            e.target.value = val; // Chuẩn hóa lại giao diện nếu người dùng gõ linh tinh
+            slider.value = val;
+
+            if (db) {
+                set(speedRef, val);
+                logToTerminal("WEB CONTROL", `Gửi lệnh Set Tốc độ = ${val}`, "cmd");
+            }
+        });
+
+        btnFwd.addEventListener('click', () => {
+            if (db && currentDir !== 1) {
+                set(dirRef, 1);
+                logToTerminal("WEB CONTROL", `Gửi lệnh MỞ CỬA (1)`, "cmd");
+            }
+        });
+
+        btnRev.addEventListener('click', () => {
+            if (db && currentDir !== 0) {
+                set(dirRef, 0);
+                logToTerminal("WEB CONTROL", `Gửi lệnh ĐÓNG CỬA (0)`, "cmd");
+            }
+        });
+
+        // --- LẮNG NGHE ĐỒNG BỘ DỮ LIỆU VÀ TRẠNG THÁI ---
+        if (db) {
+            // 1. Trạng thái kết nối máy chủ Firebase (Dùng biến ẩn mặc định của Firebase)
+            const connectedRef = ref(db, ".info/connected");
+            onValue(connectedRef, (snap) => {
+                const dot = document.getElementById('dot-fb');
+                const st = document.getElementById('st-fb');
+                if (snap.val() === true) {
+                    dot.className = "dot dot-online"; st.innerText = "Đã kết nối"; st.className = "text-green-600 font-bold";
+                    logToTerminal("Google Firebase", "Firebase Cloud đã kết nối ổn định.", "success");
+                } else {
+                    dot.className = "dot dot-offline"; st.innerText = "Mất kết nối"; st.className = "text-red-600 font-bold";
+                    logToTerminal("Google Firebase", "Đã ngắt kết nối với Firebase Cloud!", "error");
+                }
+            });
+
+            // 2. Trạng thái Mạch ESP32 (Phản hồi khi mới bật lên)
+            const espStatusRef = ref(db, 'cabin/status/esp32');
+            onValue(espStatusRef, (snap) => {
+                const val = snap.val();
+                if (val === 'online') {
+                    // Logic cập nhật UI sẽ do Heartbeat đảm nhận chính, nhưng vẫn báo log
+                    logToTerminal("Esp32-S3-N16R8", "Mạch Gateway đã online.", "success");
+                }
+            });
+
+            // CƠ CHẾ NHỊP TIM (HEARTBEAT) GIÁM SÁT MẤT ĐIỆN
+            let lastHeartbeatTime = Date.now();
+            let isDead = false;
+
+            onValue(heartbeatRef, (snap) => {
+                if (snap.val() !== null) {
+                    lastHeartbeatTime = Date.now();
+                    // Nếu đang chết mà sống lại
+                    if (isDead) {
+                        isDead = false;
+                    }
+
+                    // Cập nhật giao diện sống
+                    const dot = document.getElementById('dot-esp');
+                    const st = document.getElementById('st-esp');
+                    if (st.innerText !== "Online") {
+                        dot.className = "dot dot-online"; st.innerText = "Online"; st.className = "text-green-600 font-bold";
+                    }
+                }
+            });
+
+            setInterval(() => {
+                if (Date.now() - lastHeartbeatTime > 3000 && !isDead) {
+                    isDead = true;
+                    // Ép toàn bộ về offline
+                    const dotEsp = document.getElementById('dot-esp');
+                    const stEsp = document.getElementById('st-esp');
+                    dotEsp.className = "dot dot-offline"; stEsp.innerText = "Mất điện/Offline"; stEsp.className = "text-red-600 font-bold";
+
+                    const dotUno = document.getElementById('dot-uno');
+                    const stUno = document.getElementById('st-uno');
+                    dotUno.className = "dot dot-offline"; stUno.innerText = "Mất tín hiệu ESP32"; stUno.className = "text-red-600 font-bold";
+
+                    logToTerminal("System", "CẢNH BÁO: Quá 3s không nhận được nhịp tim. Hệ thống phần cứng bị treo hoặc mất điện!", "error");
+                }
+            }, 1000);
+
+            // 3. Trạng thái Mạch Arduino Uno
+            const unoStatusRef = ref(db, 'cabin/status/arduino');
+            onValue(unoStatusRef, (snap) => {
+                const val = snap.val();
+                const dot = document.getElementById('dot-uno');
+                const st = document.getElementById('st-uno');
+                if (val === 'online') {
+                    dot.className = "dot dot-online"; st.innerText = "Online"; st.className = "text-green-600 font-bold";
+                    logToTerminal("Arduino Uno", "Vi điều khiển xử lý động cơ đã kết nối UART.", "success");
+                } else if (val === 'offline') {
+                    dot.className = "dot dot-offline"; st.innerText = "Mất kết nối UART"; st.className = "text-red-600 font-bold";
+                    logToTerminal("Arduino Uno", "Lỗi: Không nhận được phản hồi qua UART từ Arduino!", "error");
+                }
+            });
+
+            // 4. Lắng nghe thay đổi Tốc độ và Chiều quay từ Firebase phản hồi về
+            onValue(speedRef, (snap) => {
+                if (snap.val() !== null) {
+                    slider.value = snap.val();
+                    speedInput.value = snap.val();
+                    document.getElementById('current-speed-display').innerText = snap.val();
+                }
+            });
+
+            onValue(dirRef, (snap) => {
+                if (snap.val() !== null) {
+                    currentDir = snap.val();
+                    updateBtnUI(currentDir);
+                }
+            });
+
+            // 5. Lắng nghe Log phần cứng gửi lên (Tính năng mở rộng)
+            onValue(hwLogRef, (snap) => {
+                if (snap.val() !== null && snap.val() !== "") {
+                    logToTerminal("HARDWARE", snap.val(), "hardware");
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>
