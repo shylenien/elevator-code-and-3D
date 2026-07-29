@@ -1,5 +1,5 @@
 const firebaseConfig = {
-  apiKey: "AIzaSyATaAIrcEG6EKlgPv-rpqEI2HFtK7tdoWM",
+  apiKey: "  ",
   authDomain: "elavatorcontrol.firebaseapp.com",
   databaseURL: "https://elavatorcontrol-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "elavatorcontrol",
