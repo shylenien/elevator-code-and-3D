@@ -6,7 +6,7 @@
 #define WIFI_PASSWORD "00851855"
 
 // --- THÔNG TIN FIREBASE ---
-#define API_KEY "AIzaSyATaAIrcEG6EKlgPv-rpqEI2HFtK7tdoWM"
+#define API_KEY " "
 // Bỏ chữ "https://" và dấu "/" ở cuối nhé!
 #define DATABASE_URL "elavatorcontrol-default-rtdb.asia-southeast1.firebasedatabase.app"
 
